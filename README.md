@@ -1,6 +1,6 @@
 # TG Inviter Pro 🚀
 
-[🇷🇺 Читать на русском языке (Russian)](#ru-tg-inviter-pro)
+[🇷🇺 Читать на русском языке (Russian)](#ru)
 
 A robust, multi-account Telegram inviting system with a built-in FastAPI web dashboard. Designed to scale, handle Telegram limits gracefully, and operate seamlessly via Docker.
 
@@ -72,6 +72,7 @@ uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 <hr>
 <br>
 
+<a id="ru"></a>
 # [RU] TG Inviter Pro 🚀
 
 Мощная система для инвайтинга в Telegram с поддержкой множества аккаунтов (Multi-Account) и встроенной веб-панелью управления на базе FastAPI. Спроектировано для стабильной работы, обработки лимитов Telegram и удобного деплоя через Docker.
