@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  inviter-app:
+    build: .
+    container_name: tg_inviter_pro
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env
+    environment:
+      - TZ=Etc/UTC
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin

@@ -1,0 +1,16 @@
+<div id="target-stats" hx-get="/stats" hx-trigger="every 15s, targetStatsUpdated from:body" hx-swap="outerHTML">
+    <div class="grid grid-cols-2 gap-4">
+        <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50">
+            <div class="text-xs text-slate-400 font-medium mb-1">Total Targets</div>
+            <div class="text-2xl font-bold text-white">{{ stats.total }}</div>
+        </div>
+        <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50">
+            <div class="text-xs text-slate-400 font-medium mb-1">Invited</div>
+            <div class="text-2xl font-bold text-green-400">{{ stats.invited }}</div>
+        </div>
+        <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50 col-span-2">
+            <div class="text-xs text-slate-400 font-medium mb-1">Pending in Queue</div>
+            <div class="text-xl font-semibold text-yellow-400">{{ stats.pending }}</div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,36 @@
+# Environments
+.env
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# SQLite Databases
+*.sqlite
+*.sqlite3
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.ruff_cache/
+.pytest_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.cursorries
+
+# Logs
+logs/
+*.log
+
+# Pyrogram Sessions
+*.session
+*.session-journal
