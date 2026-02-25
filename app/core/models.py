@@ -13,14 +13,21 @@ class TelegramAccount(models.Model):
     api_id = fields.IntField()
     api_hash = fields.CharField(max_length=255)
     phone_number = fields.CharField(max_length=20, unique=True, null=True)
-    session_string = fields.TextField()  # Or store path to file if preferred
+    password = fields.CharField(
+        max_length=255, null=True, description="2FA Password for login if required"
+    )
+    session_string = fields.TextField()
     proxy = fields.CharField(
         max_length=255,
         null=True,
         description="HTTP/SOCKS5 proxy, e.g., socks5://user:pass@ip:port",
     )
+    device_model = fields.CharField(max_length=255, null=True)
+    system_version = fields.CharField(max_length=255, null=True)
+    app_version = fields.CharField(max_length=255, null=True)
     status = fields.CharEnumField(AccountStatus, default=AccountStatus.ACTIVE)
     invites_today = fields.IntField(default=0)
+    joined_chats = fields.JSONField(default=dict)
 
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)
@@ -50,6 +57,7 @@ class InviteStatus(str, Enum):
     ERROR = "error"
     PRIVACY_RESTRICTED = "privacy_restricted"
     ALREADY_PARTICIPANT = "already_participant"
+    WAITING = "waiting"
 
 
 class InviteLog(models.Model):

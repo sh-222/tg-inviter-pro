@@ -12,7 +12,6 @@ from app.core.config import settings
 from app.ioc import AppProvider
 from app.web.routes import router
 
-# Configure application-wide logging
 logging.basicConfig(
     level=logging.INFO if not settings.debug else logging.DEBUG,
     format="%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d - %(message)s",

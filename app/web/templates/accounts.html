@@ -9,11 +9,25 @@
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    <!-- Add Account Form -->
+    <!-- Add Account Card -->
     <div class="bg-cardBg rounded-lg shadow-lg p-6 border border-slate-700">
         <h2 class="text-xl font-semibold mb-4 text-brand">Add New Account</h2>
-        <form hx-post="/accounts/new" hx-encoding="multipart/form-data" hx-target="#add-account-result"
-            hx-swap="innerHTML" class="space-y-4">
+
+        <!-- Mode Tabs -->
+        <div class="flex gap-2 mb-6">
+            <button id="tab-manual" onclick="switchTab('manual')"
+                class="px-4 py-2 rounded-md text-sm font-medium transition bg-brand text-white">
+                Manual Entry
+            </button>
+            <button id="tab-import" onclick="switchTab('import')"
+                class="px-4 py-2 rounded-md text-sm font-medium transition bg-slate-700 text-slate-300 hover:bg-slate-600">
+                Import from JSON
+            </button>
+        </div>
+
+        <!-- Manual Entry Form -->
+        <form id="form-manual" hx-post="/accounts/new" hx-encoding="multipart/form-data"
+            hx-target="#add-account-result" hx-swap="innerHTML" class="space-y-4">
             <div class="grid grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm font-medium text-slate-400 mb-1">API ID</label>
@@ -29,11 +43,19 @@
                 </div>
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-slate-400 mb-1">Phone Number (with +)</label>
-                <input type="text" name="phone_number"
-                    class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
-                    placeholder="+1234567890">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-1">Phone Number</label>
+                    <input type="text" name="phone_number"
+                        class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                        placeholder="+1234567890">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-1">2FA Password</label>
+                    <input type="text" name="password"
+                        class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                        placeholder="Optional">
+                </div>
             </div>
 
             <div>
@@ -43,35 +65,121 @@
                     placeholder="socks5://user:pass@ip:port">
             </div>
 
+            <!-- Device Emulation -->
+            <details class="group">
+                <summary class="cursor-pointer text-sm font-medium text-slate-400 hover:text-slate-300 transition">
+                    ▸ Device Emulation (Optional)
+                </summary>
+                <div class="mt-3 space-y-3 pl-2 border-l-2 border-slate-700">
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">Device Model</label>
+                        <input type="text" name="device_model"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                            placeholder="e.g. Samsung Galaxy S20">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">System Version</label>
+                        <input type="text" name="system_version"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                            placeholder="e.g. Windows 11">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-500 mb-1">App Version</label>
+                        <input type="text" name="app_version"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                            placeholder="e.g. 6.3.9 x64">
+                    </div>
+                </div>
+            </details>
+
             <div class="bg-slate-900/50 border border-slate-700 p-4 rounded-md">
                 <label class="block text-sm font-medium text-slate-400 mb-2">Upload .session file</label>
                 <input type="file" name="session_file" accept=".session" required
                     class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer">
-                <p class="text-xs text-slate-500 mt-2">Uploading a pre-authorized .session file is the fastest way to
-                    add an account without requiring a login code.</p>
             </div>
 
             <button type="submit"
                 class="w-full bg-brand hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 mt-4">
                 Save Account
             </button>
-            <div id="add-account-result"></div>
         </form>
+
+        <!-- Import from JSON Form -->
+        <form id="form-import" hx-post="/accounts/import-json" hx-encoding="multipart/form-data"
+            hx-target="#add-account-result" hx-swap="innerHTML" class="space-y-4 hidden">
+
+            <div class="bg-slate-900/50 border border-slate-700 p-4 rounded-md space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">Upload .json file</label>
+                    <input type="file" name="json_file" accept=".json" required
+                        class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer">
+                    <p class="text-xs text-slate-500 mt-1">JSON with app_id, app_hash, twoFA, device, sdk, etc.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">Upload .session file</label>
+                    <input type="file" name="session_file" accept=".session" required
+                        class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-700 file:text-white hover:file:bg-slate-600 cursor-pointer">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-400 mb-1">Proxy (Optional)</label>
+                <input type="text" name="proxy"
+                    class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+                    placeholder="socks5://user:pass@ip:port">
+                <p class="text-xs text-slate-500 mt-1">Proxy is NOT imported from JSON — enter it manually.</p>
+            </div>
+
+            <button type="submit"
+                class="w-full bg-brand hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150 mt-4">
+                Import Account
+            </button>
+        </form>
+
+        <div id="add-account-result" class="mt-2"></div>
     </div>
 
     <!-- Info -->
     <div class="bg-cardBg rounded-lg shadow-lg p-6 border border-slate-700">
         <h2 class="text-xl font-semibold mb-4 text-brand">Instructions</h2>
         <div class="text-sm text-slate-400 space-y-4">
-            <p><strong>1. API Credentials:</strong> You can get your <code>api_id</code> and <code>api_hash</code> from
+            <p><strong>1. Manual Entry:</strong> Fill in all fields manually. Get your <code>api_id</code> and
+                <code>api_hash</code> from
                 <a href="https://my.telegram.org" target="_blank"
                     class="text-brand hover:underline">my.telegram.org</a>.
             </p>
-            <p><strong>2. Proxies:</strong> Highly recommended to use 1 dedicated IPv4 proxy per account to avoid
-                chain-bans. Format supports SOCKS5 and HTTP.</p>
-            <p><strong>3. Sessions:</strong> We currently support uploading standard Pyrogram/Kurigram `.session` files.
-                Make sure the phone number matches the session.</p>
+            <p><strong>2. Import from JSON:</strong> Upload the <code>.json</code> and <code>.session</code> files.
+                API credentials, phone, 2FA password, and device info will be extracted automatically.
+                You only need to add your proxy.</p>
+            <p><strong>3. Proxies:</strong> Highly recommended to use 1 dedicated IPv4 proxy per account to avoid
+                chain-bans. Format: <code>socks5://user:pass@ip:port</code></p>
+            <p><strong>4. Device Emulation:</strong> If your session was created on a specific device, matching those
+                parameters reduces the risk of Telegram flagging the account.</p>
         </div>
     </div>
 </div>
+
+<script>
+    function switchTab(mode) {
+        const manual = document.getElementById('form-manual');
+        const importForm = document.getElementById('form-import');
+        const tabManual = document.getElementById('tab-manual');
+        const tabImport = document.getElementById('tab-import');
+        const result = document.getElementById('add-account-result');
+
+        result.innerHTML = '';
+
+        if (mode === 'manual') {
+            manual.classList.remove('hidden');
+            importForm.classList.add('hidden');
+            tabManual.className = 'px-4 py-2 rounded-md text-sm font-medium transition bg-brand text-white';
+            tabImport.className = 'px-4 py-2 rounded-md text-sm font-medium transition bg-slate-700 text-slate-300 hover:bg-slate-600';
+        } else {
+            manual.classList.add('hidden');
+            importForm.classList.remove('hidden');
+            tabImport.className = 'px-4 py-2 rounded-md text-sm font-medium transition bg-brand text-white';
+            tabManual.className = 'px-4 py-2 rounded-md text-sm font-medium transition bg-slate-700 text-slate-300 hover:bg-slate-600';
+        }
+    }
+</script>
 {% endblock %}
