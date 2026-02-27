@@ -6,6 +6,7 @@ class AccountStatus(str, Enum):
     ACTIVE = "active"
     BANNED = "banned"
     FLOOD_WAIT = "flood_wait"
+    INACTIVE = "inactive"
 
 
 class TelegramAccount(models.Model):
@@ -28,6 +29,7 @@ class TelegramAccount(models.Model):
     status = fields.CharEnumField(AccountStatus, default=AccountStatus.ACTIVE)
     invites_today = fields.IntField(default=0)
     joined_chats = fields.JSONField(default=dict)
+    frozen_until = fields.DatetimeField(null=True)
 
     created_at = fields.DatetimeField(auto_now_add=True)
     updated_at = fields.DatetimeField(auto_now=True)

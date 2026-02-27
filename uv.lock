@@ -499,6 +499,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pysocks" },
     { name = "python-multipart" },
+    { name = "tgcrypto" },
     { name = "tortoise-orm" },
     { name = "uvicorn" },
 ]
@@ -521,6 +522,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.2.1" },
     { name = "pysocks", specifier = ">=1.7.1" },
     { name = "python-multipart", specifier = ">=0.0.12" },
+    { name = "tgcrypto", specifier = ">=1.2.5" },
     { name = "tortoise-orm", extras = ["sqlite"], specifier = ">=0.24.0" },
     { name = "uvicorn", specifier = ">=0.30.0" },
 ]
@@ -531,6 +533,12 @@ dev = [
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "ruff", specifier = ">=0.3.0" },
 ]
+
+[[package]]
+name = "tgcrypto"
+version = "1.2.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/59/7cf5ced989e3139a791d5452d58cb8994de589576b80f9267ba76d794f6c/TgCrypto-1.2.5.tar.gz", hash = "sha256:9bc2cac6fb9a12ef5b08f3dd500174fe374d89b660cce981f57e3138559cb682", size = 37280, upload-time = "2022-11-11T19:55:11.436Z" }
 
 [[package]]
 name = "tortoise-orm"

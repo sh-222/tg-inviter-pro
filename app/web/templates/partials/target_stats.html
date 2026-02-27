@@ -1,16 +1,47 @@
 <div id="target-stats" hx-get="/stats" hx-trigger="every 15s, targetStatsUpdated from:body" hx-swap="outerHTML">
+    {% if runner_state and runner_state.is_running %}
+    <div class="mb-4 bg-brand/20 border border-brand/50 rounded-md p-3">
+        <div class="text-sm font-medium text-brand">Bot is Active</div>
+        <div class="text-xs text-slate-300 mt-1">
+            Targeting: <span class="font-semibold text-white">{{ runner_state.target_group }}</span>
+        </div>
+    </div>
+    {% elif runner_state %}
+    <div class="mb-4 bg-slate-800 border border-slate-700 rounded-md p-3">
+        <div class="text-sm font-medium text-slate-400">Bot is Stopped</div>
+    </div>
+    {% endif %}
+
     <div class="grid grid-cols-2 gap-4">
         <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50">
             <div class="text-xs text-slate-400 font-medium mb-1">Total Targets</div>
             <div class="text-2xl font-bold text-white">{{ stats.total }}</div>
         </div>
         <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50">
-            <div class="text-xs text-slate-400 font-medium mb-1">Invited</div>
-            <div class="text-2xl font-bold text-green-400">{{ stats.invited }}</div>
+            <div class="text-xs text-slate-400 font-medium mb-1">Success</div>
+            <div class="text-2xl font-bold text-green-400">{{ stats.success }}</div>
         </div>
-        <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50 col-span-2">
-            <div class="text-xs text-slate-400 font-medium mb-1">Pending in Queue</div>
-            <div class="text-xl font-semibold text-yellow-400">{{ stats.pending }}</div>
+        <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50">
+            <div class="text-xs text-slate-400 font-medium mb-1">Failed</div>
+            <div class="text-2xl font-bold text-red-400">{{ stats.failed }}</div>
+        </div>
+        <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50">
+            <div class="text-xs text-slate-400 font-medium mb-1">Processed</div>
+            <div class="text-2xl font-bold text-blue-400">{{ stats.invited }}</div>
+        </div>
+        <div
+            class="bg-slate-900 rounded-md p-4 border border-slate-700/50 col-span-2 flex justify-between items-center">
+            <div>
+                <div class="text-xs text-slate-400 font-medium mb-1">Pending in Queue</div>
+                <div class="text-xl font-semibold text-yellow-400">{{ stats.pending }}</div>
+            </div>
+            {% if stats.total > 0 %}
+            <button hx-post="/clear-targets" hx-target="#target-stats" hx-swap="outerHTML"
+                hx-confirm="Are you sure you want to clear all targets?"
+                class="text-xs bg-red-600 hover:bg-red-700 text-white font-medium py-1 px-3 rounded transition duration-150">
+                Clear All
+            </button>
+            {% endif %}
         </div>
     </div>
 </div>

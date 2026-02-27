@@ -1,8 +1,8 @@
 import asyncio
 import logging
-import random
 from typing import Optional
 
+from datetime import datetime, timezone
 from app.core.models import TelegramAccount, TargetUser, AccountStatus, InviteStatus
 from app.services.inviter import InviterService
 
@@ -16,15 +16,28 @@ class InviterRunner:
         self.inviter_service = inviter_service
         self._current_task: Optional[asyncio.Task] = None
         self._is_running = False
+        self._target_group_username: Optional[str] = None
 
     async def _run_loop(self, target_group_username: str) -> None:
         logger.info(f"Starting inviter loop for group {target_group_username}")
+        account_index = 0
         try:
             while self._is_running:
                 uninvited_users = await TargetUser.filter(is_invited=False).limit(20)
                 if not uninvited_users:
                     logger.info("Inviter loop finished: No more uninvited users.")
                     break
+
+                now = datetime.now(timezone.utc)
+                frozen_accounts = await TelegramAccount.filter(
+                    status=AccountStatus.FLOOD_WAIT
+                )
+                for f_acc in frozen_accounts:
+                    if f_acc.frozen_until and f_acc.frozen_until <= now:
+                        f_acc.status = AccountStatus.ACTIVE
+                        f_acc.frozen_until = None
+                        await f_acc.save()
+                        logger.info(f"Account {f_acc.id} unfrozen.")
 
                 active_accounts = await TelegramAccount.filter(
                     status=AccountStatus.ACTIVE
@@ -37,7 +50,17 @@ class InviterRunner:
                     if not self._is_running:
                         break
 
-                    account = random.choice(active_accounts)
+                    active_accounts = await TelegramAccount.filter(
+                        status=AccountStatus.ACTIVE
+                    )
+                    if not active_accounts:
+                        logger.error("All accounts are inactive or restricted.")
+                        self._is_running = False
+                        break
+
+                    account_index = account_index % len(active_accounts)
+                    account = active_accounts[account_index]
+                    account_index += 1
 
                     logger.info(
                         f"Inviting {user.username or user.tg_id} "
@@ -53,14 +76,14 @@ class InviterRunner:
                         await asyncio.sleep(2)
                         continue
 
-                    if status != InviteStatus.SUCCESS:
-                        active_accounts = await TelegramAccount.filter(
-                            status=AccountStatus.ACTIVE
+                    if status == InviteStatus.SUCCESS:
+                        import random
+
+                        global_delay = random.uniform(300, 600)
+                        logger.info(
+                            f"Invite successful. Waiting {global_delay:.0f}s before next invite globally."
                         )
-                        if not active_accounts:
-                            logger.error("All accounts are inactive or restricted.")
-                            self._is_running = False
-                            break
+                        await asyncio.sleep(global_delay)
 
                 await asyncio.sleep(5)
 
@@ -71,6 +94,7 @@ class InviterRunner:
         finally:
             self._is_running = False
             self._current_task = None
+            self._target_group_username = None
             logger.info("Inviter loop stopped.")
 
     def start(self, target_group_username: str) -> bool:
@@ -78,6 +102,7 @@ class InviterRunner:
             return False
 
         self._is_running = True
+        self._target_group_username = target_group_username
         self._current_task = asyncio.create_task(self._run_loop(target_group_username))
         return True
 
@@ -87,8 +112,13 @@ class InviterRunner:
 
         self._is_running = False
         self._current_task.cancel()
+        self._target_group_username = None
         return True
 
     @property
     def is_running(self) -> bool:
         return self._is_running
+
+    @property
+    def target_group_username(self) -> Optional[str]:
+        return self._target_group_username

@@ -7,11 +7,11 @@ A robust, multi-account Telegram inviting system with a built-in FastAPI web das
 > ⚠️ **DISCLAIMER:** This project is designed strictly for **administrative and organizational purposes**. It is intended to automate adding consenting users to corporate groups, university class groups, and event chats. **This software must NOT be used for spam propagation or any activities that violate Telegram's Terms of Service.** The developers hold no responsibility for accounts banned due to misuse.
 
 ## Features ✨
-- **Intelligent Multi-Account Rotation**: Automatically distributes invites among active sessions.
-- **Resilient Engine**: Deep Pyrogram integration gracefully handles `FloodWait`, `PeerFlood`, and privacy restrictions without crashing.
-- **FastAPI + HTMX Dashboard**: A lightweight, modern SPA-like dashboard tightly secured with Basic Auth.
+- **Intelligent Multi-Account Rotation**: Automatically distributes invites evenly among active sessions using a true round-robin algorithm.
+- **Resilient Engine & Humanized Behavior**: Deep Pyrogram integration handles `FloodWait`, `PeerFlood`, and privacy restrictions without crashing. Simulates human presence and profile views before inviting to reduce bans.
+- **FastAPI + HTMX Dashboard**: A lightweight, modern SPA-like dashboard with detailed real-time statistics (Success, Failed, Pending), tightly secured with Basic Auth.
 - **Dependency Injection**: Architected with `dishka` & Clean Architecture (DDD) principles.
-- **Lightning Fast Deployments**: Uses `uv` package manager and lightweight Docker images.
+- **Lightning Fast Deployments**: Uses `uv` package manager, `TgCrypto` for Pyrogram speedups, and optimized multi-stage Docker builds for minimal image size.
 
 ### Web Dashboard Preview
 ![Main Dashboard](assets/dashboard_main.png)
@@ -80,11 +80,11 @@ uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 > ⚠️ **ОТКАЗ ОТ ОТВЕТСТВЕННОСТИ:** Данный проект предназначен ИСКЛЮЧИТЕЛЬНО для **административных и организационных целей**. Он создан для автоматизации добавления знакомых контактов (с их согласия) в корпоративные чаты, учебные группы или чаты мероприятий. **Это программное обеспечение НЕ ДОЛЖНО использоваться для рассылки спама, накрутки ботов или любых действий, нарушающих Правила использования (ToS) Telegram.** Разработчики не несут ответственности за блокировку аккаунтов в результате неправомерного использования.
 
 ## Возможности ✨
-- **Очередь и ротация аккаунтов**: Автоматически распределяет нагрузку на все живые аккаунты.
-- **Отказоустойчивое ядро**: Грамотная обработка `FloodWait`, `PeerFlood` и приватности профилей (код не падает от сетевых ошибок).
-- **FastAPI + HTMX Dashboard**: Легкая и современная панель управления (SPA-опыт без тяжелых JS-фреймворков), закрытая надежной Basic авторизацией.
+- **Умная ротация аккаунтов (Round-Robin)**: Равномерно распределяет нагрузку на все живые аккаунты.
+- **Отказоустойчивость и имитация человека**: Грамотная обработка `FloodWait`, `PeerFlood` и приватности профилей. Бот имитирует онлайн-присутствие и просмотр профиля человека перед добавлением.
+- **FastAPI + HTMX Dashboard**: Легкая и современная панель управления с развернутой статистикой (Успешные, Ошибки, В очереди), закрытая надежной Basic авторизацией.
 - **Чистая архитектура**: Использование `dishka` для внедрения зависимостей (DI) и паттернов DDD.
-- **Быстрая сборка**: Использование пакетного менеджера `uv` внутри `python:3.13-slim`.
+- **Быстрая и легкая сборка**: Пакетный менеджер `uv`, ускорение Pyrogram через `TgCrypto` и многоэтапная (multi-stage) сборка Docker-образа для минимального веса.
 
 ## Схема архитектуры 🏗
 Архитектуру проекта на английском см. выше в блоке `mermaid`. Проект разделен на веб-слой (Web UI), фоневые задачи (Inviter Runner), персистентное хранилище (SQLite/Volumes) и прямое взаимодействие с MTProto.

@@ -2,6 +2,7 @@ import json
 import os
 import secrets
 import shutil
+from pathlib import Path
 from typing import Any
 
 from fastapi import (
@@ -20,9 +21,16 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from dishka.integrations.fastapi import FromDishka, inject
 
 from app.core.config import settings
-from app.core.models import TelegramAccount, TargetUser, AccountStatus
+from app.core.models import (
+    TelegramAccount,
+    TargetUser,
+    AccountStatus,
+    InviteLog,
+    InviteStatus,
+)
 from app.services.csv_reader import CSVReaderService
 from app.services.runner import InviterRunner
+from app.services.session_converter import ensure_pyrogram_session
 
 security = HTTPBasic()
 
@@ -48,7 +56,11 @@ templates = Jinja2Templates(directory="app/web/templates")
 
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request) -> Any:
+@inject
+async def dashboard(
+    request: Request,
+    runner: FromDishka[InviterRunner] = None,
+) -> Any:
     """Main dashboard view."""
     accounts = await TelegramAccount.all()
 
@@ -56,15 +68,26 @@ async def dashboard(request: Request) -> Any:
     invited_targets = await TargetUser.filter(is_invited=True).count()
     pending_targets = await TargetUser.filter(is_invited=False).count()
 
+    success_invites = await InviteLog.filter(status=InviteStatus.SUCCESS).count()
+    failed_invites = await InviteLog.exclude(
+        status__in=[InviteStatus.SUCCESS, InviteStatus.WAITING]
+    ).count()
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
             "request": request,
             "accounts": accounts,
+            "runner_state": {
+                "is_running": runner.is_running,
+                "target_group": runner.target_group_username,
+            },
             "stats": {
                 "total": total_targets,
                 "invited": invited_targets,
                 "pending": pending_targets,
+                "success": success_invites,
+                "failed": failed_invites,
             },
         },
     )
@@ -121,20 +144,73 @@ async def delete_account(request: Request, account_id: int) -> Any:
 
 
 @router.get("/stats", response_class=HTMLResponse)
-async def get_stats(request: Request) -> Any:
+@inject
+async def get_stats(
+    request: Request,
+    runner: FromDishka[InviterRunner] = None,
+) -> Any:
     """HTMX endpoint to refresh the target statistics block."""
     total_targets = await TargetUser.all().count()
     invited_targets = await TargetUser.filter(is_invited=True).count()
     pending_targets = await TargetUser.filter(is_invited=False).count()
 
+    success_invites = await InviteLog.filter(status=InviteStatus.SUCCESS).count()
+    failed_invites = await InviteLog.exclude(
+        status__in=[InviteStatus.SUCCESS, InviteStatus.WAITING]
+    ).count()
+
     return templates.TemplateResponse(
         "partials/target_stats.html",
         {
             "request": request,
+            "runner_state": {
+                "is_running": runner.is_running,
+                "target_group": runner.target_group_username,
+            },
             "stats": {
                 "total": total_targets,
                 "invited": invited_targets,
                 "pending": pending_targets,
+                "success": success_invites,
+                "failed": failed_invites,
+            },
+        },
+    )
+
+
+@router.post("/clear-targets", response_class=HTMLResponse)
+@inject
+async def clear_targets(
+    request: Request,
+    runner: FromDishka[InviterRunner] = None,
+) -> Any:
+    """HTMX endpoint to clear all pending targets."""
+    # Delete targets
+    await TargetUser.all().delete()
+
+    total_targets = await TargetUser.all().count()
+    invited_targets = await TargetUser.filter(is_invited=True).count()
+    pending_targets = await TargetUser.filter(is_invited=False).count()
+
+    success_invites = await InviteLog.filter(status=InviteStatus.SUCCESS).count()
+    failed_invites = await InviteLog.exclude(
+        status__in=[InviteStatus.SUCCESS, InviteStatus.WAITING]
+    ).count()
+
+    return templates.TemplateResponse(
+        "partials/target_stats.html",
+        {
+            "request": request,
+            "runner_state": {
+                "is_running": runner.is_running,
+                "target_group": runner.target_group_username,
+            },
+            "stats": {
+                "total": total_targets,
+                "invited": invited_targets,
+                "pending": pending_targets,
+                "success": success_invites,
+                "failed": failed_invites,
             },
         },
     )
@@ -153,7 +229,18 @@ async def upload_targets(
 
     try:
         content = await file.read()
-        decoded_content = content.decode("utf-8")
+
+        encodings = ["utf-8-sig", "utf-8", "utf-16", "cp1251"]
+        decoded_content = None
+        for enc in encodings:
+            try:
+                decoded_content = content.decode(enc)
+                break
+            except UnicodeError:
+                pass
+
+        if decoded_content is None:
+            decoded_content = content.decode("utf-8", errors="replace")
 
         targets_data = csv_reader.read_targets(decoded_content)
 
@@ -244,12 +331,16 @@ async def add_new_account(
             device_model=device_model or None,
             system_version=system_version or None,
             app_version=app_version or None,
-            session_string="file",
+            session_string="pending",
         )
 
-        file_path = os.path.join(settings.data_dir, f"session_{account.id}.session")
+        session_name = f"session_{account.id}"
+        file_path = os.path.join(settings.data_dir, f"{session_name}.session")
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(session_file.file, buffer)
+
+        account.session_string = f"file:{session_name}.session"
+        await account.save()
 
         return f"<div class='text-green-400 text-sm mt-2'>Account #{account.id} saved securely.</div>"
     except Exception as e:
@@ -295,18 +386,25 @@ async def import_account_from_json(
             device_model=device or None,
             system_version=sdk or None,
             app_version=app_ver or None,
-            session_string="file",
+            session_string="pending",
         )
 
-        file_path = os.path.join(settings.data_dir, f"session_{account.id}.session")
+        session_name = f"session_{account.id}"
+        file_path = os.path.join(settings.data_dir, f"{session_name}.session")
         content = await session_file.read()
         with open(file_path, "wb") as buffer:
             buffer.write(content)
 
+        converted = ensure_pyrogram_session(Path(file_path))
+        fmt = "Telethon → Kurigram" if converted else "Kurigram"
+
+        account.session_string = f"file:{session_name}.session"
+        await account.save()
+
         return (
             f"<div class='text-green-400 text-sm mt-2'>"
             f"Account #{account.id} imported: {phone or 'no phone'}. "
-            f"Device: {device or 'default'}"
+            f"Device: {device or 'default'}. Format: {fmt}"
             f"</div>"
         )
     except Exception as e:

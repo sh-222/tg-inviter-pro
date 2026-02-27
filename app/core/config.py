@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     db_url: str = f"sqlite://{DATA_DIR}/db.sqlite3"
 
     # Core logic limits and settings (Required)
-    min_delay_seconds: int
-    max_delay_seconds: int
-    daily_invite_limit: int
+    min_delay_seconds: int = 300
+    max_delay_seconds: int = 600
+    daily_invite_limit: int = 50
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
