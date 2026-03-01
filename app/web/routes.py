@@ -4,6 +4,7 @@ import secrets
 import shutil
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from fastapi import (
     APIRouter,
@@ -343,6 +344,22 @@ async def manage_accounts_page(request: Request) -> Any:
     return templates.TemplateResponse("accounts.html", {"request": request})
 
 
+from urllib.parse import urlparse
+
+
+def is_valid_proxy(proxy_url: str) -> bool:
+    if not proxy_url:
+        return True
+    try:
+        parsed = urlparse(proxy_url)
+        return (
+            parsed.scheme in ["http", "socks4", "socks5"]
+            and parsed.hostname is not None
+        )
+    except Exception:
+        return False
+
+
 @router.post("/accounts/new", response_class=HTMLResponse)
 async def add_new_account(
     request: Request,
@@ -359,6 +376,8 @@ async def add_new_account(
     """Endpoint to create a new account with a session file upload."""
     if not session_file.filename.endswith(".session"):
         return "<div class='text-red-400 text-sm mt-2'>Error: Please upload a valid .session file.</div>"
+    if proxy and not is_valid_proxy(proxy):
+        return "<div class='text-red-400 text-sm mt-2'>Error: Invalid proxy format. Use http://, socks4://, or socks5://</div>"
 
     try:
         account = await TelegramAccount.create(
@@ -400,6 +419,8 @@ async def import_account_from_json(
         return "<div class='text-red-400 text-sm mt-2'>Error: Please upload a valid .session file.</div>"
     if not json_file.filename.endswith(".json"):
         return "<div class='text-red-400 text-sm mt-2'>Error: Please upload a valid .json file.</div>"
+    if proxy and not is_valid_proxy(proxy):
+        return "<div class='text-red-400 text-sm mt-2'>Error: Invalid proxy format. Use http://, socks4://, or socks5://</div>"
 
     try:
         raw = await json_file.read()
