@@ -16,6 +16,7 @@ from pyrogram.errors import (
     RPCError,
     UserDeactivated,
 )
+from tortoise.exceptions import IntegrityError
 
 from app.core.config import settings
 from app.core.models import (
@@ -256,7 +257,17 @@ class InviterService:
                 )
                 target_user.is_invited = True
                 await target_user.save()
-        except (ConnectionError, TimeoutError) as e:
+        except EOFError:
+            error_msg = "Session invalid / interactive login prompt"
+            logger.error(
+                f"Account {account.id} session invalid (EOFError). Marking INACTIVE."
+            )
+            try:
+                account.status = AccountStatus.INACTIVE
+                await account.save()
+            except Exception:
+                pass
+        except (ConnectionError, TimeoutError, asyncio.TimeoutError) as e:
             error_msg = f"Connection/Timeout Error: {e}"
             logger.error(f"Network error on {account.id}: {e}")
         except Exception as e:
@@ -269,12 +280,19 @@ class InviterService:
                 except Exception as e:
                     logger.error(f"Error stopping client {account.id}: {e}")
 
-        await InviteLog.create(
-            account=account,
-            target_user=target_user,
-            target_group_id=target_group_username,
-            status=status,
-            error_message=error_msg,
-        )
+        try:
+            await InviteLog.create(
+                account=account,
+                target_user=target_user,
+                target_group_id=target_group_username,
+                status=status,
+                error_message=error_msg,
+            )
+        except IntegrityError:
+            logger.warning(
+                f"Skipping log creation for {account.id}, account might have been deleted."
+            )
+        except Exception as e:
+            logger.error(f"Failed to create InviteLog: {e}")
 
         return status
