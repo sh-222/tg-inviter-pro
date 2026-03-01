@@ -131,7 +131,11 @@ class InviterService:
             settings.min_delay_seconds, settings.max_delay_seconds
         )
         jitter = base_delay * random.uniform(-0.1, 0.1)
-        await asyncio.sleep(base_delay + jitter)
+        wait_time = base_delay + jitter
+        logger.info(
+            f"Account {account.id} generates a random delay of {wait_time:.0f}s before connecting..."
+        )
+        await asyncio.sleep(wait_time)
 
         status = InviteStatus.ERROR
         error_msg = None

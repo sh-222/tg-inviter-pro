@@ -10,7 +10,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./.env:/app/.env
+    env_file:
+      - .env
     environment:
       - TZ=Etc/UTC
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=admin

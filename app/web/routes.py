@@ -69,8 +69,19 @@ async def dashboard(
     pending_targets = await TargetUser.filter(is_invited=False).count()
 
     success_invites = await InviteLog.filter(status=InviteStatus.SUCCESS).count()
+    privacy_restricted = await InviteLog.filter(
+        status=InviteStatus.PRIVACY_RESTRICTED
+    ).count()
+    already_participant = await InviteLog.filter(
+        status=InviteStatus.ALREADY_PARTICIPANT
+    ).count()
     failed_invites = await InviteLog.exclude(
-        status__in=[InviteStatus.SUCCESS, InviteStatus.WAITING]
+        status__in=[
+            InviteStatus.SUCCESS,
+            InviteStatus.WAITING,
+            InviteStatus.PRIVACY_RESTRICTED,
+            InviteStatus.ALREADY_PARTICIPANT,
+        ]
     ).count()
 
     return templates.TemplateResponse(
@@ -87,6 +98,8 @@ async def dashboard(
                 "invited": invited_targets,
                 "pending": pending_targets,
                 "success": success_invites,
+                "privacy_restricted": privacy_restricted,
+                "already_participant": already_participant,
                 "failed": failed_invites,
             },
         },
@@ -155,8 +168,19 @@ async def get_stats(
     pending_targets = await TargetUser.filter(is_invited=False).count()
 
     success_invites = await InviteLog.filter(status=InviteStatus.SUCCESS).count()
+    privacy_restricted = await InviteLog.filter(
+        status=InviteStatus.PRIVACY_RESTRICTED
+    ).count()
+    already_participant = await InviteLog.filter(
+        status=InviteStatus.ALREADY_PARTICIPANT
+    ).count()
     failed_invites = await InviteLog.exclude(
-        status__in=[InviteStatus.SUCCESS, InviteStatus.WAITING]
+        status__in=[
+            InviteStatus.SUCCESS,
+            InviteStatus.WAITING,
+            InviteStatus.PRIVACY_RESTRICTED,
+            InviteStatus.ALREADY_PARTICIPANT,
+        ]
     ).count()
 
     return templates.TemplateResponse(
@@ -172,6 +196,8 @@ async def get_stats(
                 "invited": invited_targets,
                 "pending": pending_targets,
                 "success": success_invites,
+                "privacy_restricted": privacy_restricted,
+                "already_participant": already_participant,
                 "failed": failed_invites,
             },
         },
@@ -193,8 +219,19 @@ async def clear_targets(
     pending_targets = await TargetUser.filter(is_invited=False).count()
 
     success_invites = await InviteLog.filter(status=InviteStatus.SUCCESS).count()
+    privacy_restricted = await InviteLog.filter(
+        status=InviteStatus.PRIVACY_RESTRICTED
+    ).count()
+    already_participant = await InviteLog.filter(
+        status=InviteStatus.ALREADY_PARTICIPANT
+    ).count()
     failed_invites = await InviteLog.exclude(
-        status__in=[InviteStatus.SUCCESS, InviteStatus.WAITING]
+        status__in=[
+            InviteStatus.SUCCESS,
+            InviteStatus.WAITING,
+            InviteStatus.PRIVACY_RESTRICTED,
+            InviteStatus.ALREADY_PARTICIPANT,
+        ]
     ).count()
 
     return templates.TemplateResponse(
@@ -210,6 +247,8 @@ async def clear_targets(
                 "invited": invited_targets,
                 "pending": pending_targets,
                 "success": success_invites,
+                "privacy_restricted": privacy_restricted,
+                "already_participant": already_participant,
                 "failed": failed_invites,
             },
         },

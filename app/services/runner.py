@@ -54,9 +54,11 @@ class InviterRunner:
                         status=AccountStatus.ACTIVE
                     )
                     if not active_accounts:
-                        logger.error("All accounts are inactive or restricted.")
-                        self._is_running = False
-                        break
+                        logger.warning(
+                            "All accounts are inactive, restricted, or in flood wait. Pausing for 60s..."
+                        )
+                        await asyncio.sleep(60)
+                        break  # Break inner loop to re-evaluate frozen accounts in outer loop
 
                     account_index = account_index % len(active_accounts)
                     account = active_accounts[account_index]
