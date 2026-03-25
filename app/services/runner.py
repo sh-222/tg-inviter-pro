@@ -80,8 +80,13 @@ class InviterRunner:
 
                     if status == InviteStatus.SUCCESS:
                         import random
+                        from app.core.models import AppSettings
 
-                        global_delay = random.uniform(300, 600)
+                        app_settings, _ = await AppSettings.get_or_create(id=1)
+                        global_delay = random.uniform(
+                            app_settings.min_delay_seconds,
+                            app_settings.max_delay_seconds
+                        )
                         logger.info(
                             f"Invite successful. Waiting {global_delay:.0f}s before next invite globally."
                         )

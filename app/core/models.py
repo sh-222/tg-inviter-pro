@@ -78,3 +78,13 @@ class InviteLog(models.Model):
 
     class Meta:
         table = "invite_logs"
+
+
+class AppSettings(models.Model):
+    id = fields.IntField(pk=True)
+    min_delay_seconds = fields.IntField(default=300)
+    max_delay_seconds = fields.IntField(default=600)
+    daily_invite_limit = fields.IntField(default=50)
+
+    class Meta:
+        table = "app_settings"

@@ -25,6 +25,7 @@ from app.core.models import (
     InviteLog,
     InviteStatus,
     AccountStatus,
+    AppSettings,
 )
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,67 @@ class InviterService:
 
         return target
 
+    async def _handle_invite_error(
+        self, e: Exception, account: TelegramAccount, target_user: TargetUser
+    ) -> tuple[InviteStatus, str]:
+        """Classify the exception and update models accordingly."""
+        if isinstance(e, UserPrivacyRestricted):
+            logger.info(f"Privacy restrictions: {target_user.username}")
+            target_user.is_invited = True
+            await target_user.save()
+            return InviteStatus.PRIVACY_RESTRICTED, str(e)
+            
+        elif isinstance(e, UserAlreadyParticipant):
+            logger.info(f"Already in group: {target_user.username}")
+            target_user.is_invited = True
+            await target_user.save()
+            return InviteStatus.ALREADY_PARTICIPANT, str(e)
+            
+        elif isinstance(e, UserDeactivated):
+            account.status = AccountStatus.INACTIVE
+            await account.save()
+            logger.error(f"UserDeactivated: {account.id}")
+            return InviteStatus.ERROR, "UserDeactivated"
+            
+        elif isinstance(e, FloodWait):
+            account.status = AccountStatus.FLOOD_WAIT
+            await account.save()
+            logger.warning(f"FloodWait on {account.id} for {e.value}s")
+            return InviteStatus.ERROR, f"FloodWait: {e.value}s"
+            
+        elif isinstance(e, PeerFlood):
+            account.status = AccountStatus.FLOOD_WAIT
+            account.frozen_until = datetime.now(timezone.utc) + timedelta(hours=24)
+            await account.save()
+            logger.error(f"PeerFlood on {account.id}, frozen for 24h")
+            return InviteStatus.ERROR, "PeerFlood"
+            
+        elif isinstance(e, RPCError):
+            logger.error(f"RPC Error on {account.id}: {e}")
+            err_str = str(e).upper()
+            if any(term in err_str for term in ["USER", "PEER", "CONTACT", "BOT", "PRIVACY", "BANNED_RIGHTS"]):
+                logger.info(f"Marking target {target_user.username} as processed due to permanent RPC error.")
+                target_user.is_invited = True
+                await target_user.save()
+            return InviteStatus.ERROR, f"RPC Error: {e}"
+            
+        elif isinstance(e, EOFError):
+            logger.error(f"Account {account.id} session invalid (EOFError). Marking INACTIVE.")
+            try:
+                account.status = AccountStatus.INACTIVE
+                await account.save()
+            except Exception:
+                pass
+            return InviteStatus.ERROR, "Session invalid / interactive login prompt"
+            
+        elif isinstance(e, (ConnectionError, TimeoutError, asyncio.TimeoutError)):
+            logger.error(f"Network error on {account.id}: {e}")
+            return InviteStatus.ERROR, f"Connection/Timeout Error: {e}"
+            
+        else:
+            logger.exception(f"Unexpected error on {account.id}: {e}")
+            return InviteStatus.ERROR, f"Unexpected Error: {e}"
+
     async def add_chat_members(
         self,
         account: TelegramAccount,
@@ -121,15 +183,17 @@ class InviterService:
             )
             return InviteStatus.ERROR
 
+        app_settings, _ = await AppSettings.get_or_create(id=1)
+
         if (
             account.status != AccountStatus.ACTIVE
-            or account.invites_today >= settings.daily_invite_limit
+            or account.invites_today >= app_settings.daily_invite_limit
         ):
             logger.warning(f"Account {account.id} is not active or reached limit.")
             return InviteStatus.ERROR
 
         base_delay = random.uniform(
-            settings.min_delay_seconds, settings.max_delay_seconds
+            app_settings.min_delay_seconds, app_settings.max_delay_seconds
         )
         jitter = base_delay * random.uniform(-0.1, 0.1)
         wait_time = base_delay + jitter
@@ -207,72 +271,8 @@ class InviterService:
             target_user.is_invited = True
             await target_user.save()
 
-        except UserPrivacyRestricted as e:
-            status = InviteStatus.PRIVACY_RESTRICTED
-            error_msg = str(e)
-            logger.info(f"Privacy restrictions: {target_user.username}")
-            target_user.is_invited = True
-            await target_user.save()
-        except UserAlreadyParticipant as e:
-            status = InviteStatus.ALREADY_PARTICIPANT
-            error_msg = str(e)
-            logger.info(f"Already in group: {target_user.username}")
-            target_user.is_invited = True
-            await target_user.save()
-        except UserDeactivated:
-            error_msg = "UserDeactivated"
-            account.status = AccountStatus.INACTIVE
-            await account.save()
-            logger.error(f"UserDeactivated: {account.id}")
-            # If the invoking account is deactivated, do NOT mark target_user as invited
-            # because the invite didn't even happen, the account just died.
-        except FloodWait as e:
-            error_msg = f"FloodWait: {e.value}s"
-            account.status = AccountStatus.FLOOD_WAIT
-            await account.save()
-            logger.warning(f"FloodWait on {account.id} for {e.value}s")
-        except PeerFlood:
-            error_msg = "PeerFlood"
-            account.status = AccountStatus.FLOOD_WAIT
-            account.frozen_until = datetime.now(timezone.utc) + timedelta(hours=24)
-            await account.save()
-            logger.error(f"PeerFlood on {account.id}, frozen for 24h")
-        except RPCError as e:
-            error_msg = f"RPC Error: {e}"
-            logger.error(f"RPC Error on {account.id}: {e}")
-            err_str = str(e).upper()
-            if any(
-                term in err_str
-                for term in [
-                    "USER",
-                    "PEER",
-                    "CONTACT",
-                    "BOT",
-                    "PRIVACY",
-                    "BANNED_RIGHTS",
-                ]
-            ):
-                logger.info(
-                    f"Marking target {target_user.username} as processed due to permanent RPC error."
-                )
-                target_user.is_invited = True
-                await target_user.save()
-        except EOFError:
-            error_msg = "Session invalid / interactive login prompt"
-            logger.error(
-                f"Account {account.id} session invalid (EOFError). Marking INACTIVE."
-            )
-            try:
-                account.status = AccountStatus.INACTIVE
-                await account.save()
-            except Exception:
-                pass
-        except (ConnectionError, TimeoutError, asyncio.TimeoutError) as e:
-            error_msg = f"Connection/Timeout Error: {e}"
-            logger.error(f"Network error on {account.id}: {e}")
         except Exception as e:
-            error_msg = f"Unexpected Error: {e}"
-            logger.exception(f"Unexpected error on {account.id}: {e}")
+            status, error_msg = await self._handle_invite_error(e, account, target_user)
         finally:
             if client and client.is_connected:
                 try:

@@ -40,6 +40,12 @@
                 <div id="upload-result"></div>
             </form>
         </div>
+
+        <div class="bg-cardBg rounded-lg shadow-lg p-6 border border-slate-700" id="settings-card">
+            <h2 class="text-xl font-semibold mb-4 text-brand">Application Settings</h2>
+            {% include "partials/settings_form.html" %}
+        </div>
+
         <div class="bg-cardBg rounded-lg shadow-lg p-6 border border-slate-700">
             <h2 class="text-xl font-semibold mb-4 text-brand">Target Statistics</h2>
             {% include "partials/target_stats.html" %}
@@ -75,11 +81,11 @@
                         <tr class="border-b border-slate-700 text-slate-400 text-sm">
                             <th class="pb-3 px-4 font-medium">Session / Phone</th>
                             <th class="pb-3 px-4 font-medium">Status</th>
-                            <th class="pb-3 px-4 font-medium">Invites Today</th>
+                            <th class="pb-3 px-4 font-medium">Successes (Today)</th>
                             <th class="pb-3 px-4 font-medium"></th>
                         </tr>
                     </thead>
-                    <tbody id="accounts-tbody" hx-get="/accounts" hx-trigger="every 10s" hx-swap="innerHTML">
+                    <tbody id="accounts-tbody" hx-get="/accounts" hx-trigger="every 10s [!document.hidden]" hx-swap="innerHTML">
                         {% include "partials/account_rows.html" %}
                     </tbody>
                 </table>

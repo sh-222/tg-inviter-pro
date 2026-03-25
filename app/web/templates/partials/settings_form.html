@@ -1,0 +1,25 @@
+<form hx-post="/settings" hx-target="#settings-result" hx-swap="innerHTML" class="space-y-4">
+    <div>
+        <label class="block text-sm font-medium text-slate-400 mb-1">Min Delay (seconds)</label>
+        <input type="number" name="min_delay_seconds" value="{{ app_settings.min_delay_seconds }}"
+            class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            required min="1">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-400 mb-1">Max Delay (seconds)</label>
+        <input type="number" name="max_delay_seconds" value="{{ app_settings.max_delay_seconds }}"
+            class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            required min="1">
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-slate-400 mb-1">Daily Limit per Account</label>
+        <input type="number" name="daily_invite_limit" value="{{ app_settings.daily_invite_limit }}"
+            class="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand"
+            required min="1">
+    </div>
+    <button type="submit"
+        class="w-full bg-brand hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition duration-150">
+        Save Settings
+    </button>
+    <div id="settings-result" class="mt-2 text-center text-sm"></div>
+</form>

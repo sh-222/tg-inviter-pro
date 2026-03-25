@@ -19,12 +19,12 @@
         {% endif %}
     </td>
     <td class="py-3 px-4 text-sm">
-        <div class="flex items-center">
+        <div class="flex items-center" title="Only successful invites are counted towards the progress bar.">
             <div class="w-full bg-slate-700 rounded-full h-1.5 mr-2">
-                <div class="bg-brand h-1.5 rounded-full" style="width: {{ (account.invites_today / 50 * 100)|int }}%">
+                <div class="bg-brand h-1.5 rounded-full" style="width: {{ (account.invites_today / app_settings.daily_invite_limit * 100)|int }}%">
                 </div>
             </div>
-            <span class="text-slate-400 text-xs w-8 text-right">{{ account.invites_today }}/50</span>
+            <span class="text-slate-400 text-xs w-8 text-right">{{ account.invites_today }}/{{ app_settings.daily_invite_limit }}</span>
         </div>
     </td>
     <td class="py-3 px-4 text-right">

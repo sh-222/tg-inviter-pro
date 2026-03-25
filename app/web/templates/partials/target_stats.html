@@ -1,4 +1,4 @@
-<div id="target-stats" hx-get="/stats" hx-trigger="every 15s, targetStatsUpdated from:body" hx-swap="outerHTML">
+<div id="target-stats" hx-get="/stats" hx-trigger="every 15s [!document.hidden], targetStatsUpdated from:body" hx-swap="outerHTML">
     {% if runner_state and runner_state.is_running %}
     <div class="mb-4 bg-brand/20 border border-brand/50 rounded-md p-3">
         <div class="text-sm font-medium text-brand">Bot is Active</div>
@@ -34,7 +34,7 @@
             <div class="text-2xl font-bold text-red-400">{{ stats.failed }}</div>
         </div>
         <div class="bg-slate-900 rounded-md p-4 border border-slate-700/50">
-            <div class="text-xs text-slate-400 font-medium mb-1">Processed</div>
+            <div class="text-xs text-slate-400 font-medium mb-1" title="Number of targets that have been attempted and won't be retried.">Processed (Done)</div>
             <div class="text-2xl font-bold text-blue-400">{{ stats.invited }}</div>
         </div>
         <div
