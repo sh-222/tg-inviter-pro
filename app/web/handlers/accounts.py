@@ -31,15 +31,19 @@ def is_valid_proxy(proxy_url: str) -> bool:
 @router.get("/accounts", response_class=HTMLResponse)
 async def get_accounts(request: Request) -> Any:
     """HTMX endpoint to refresh the account table rows."""
+    from app.core.models import AppSettings
+    app_settings, _ = await AppSettings.get_or_create(id=1)
     accounts = await TelegramAccount.all()
     return templates.TemplateResponse(
-        request=request, name="partials/account_rows.html", context={"request": request, "accounts": accounts}
+        request=request, name="partials/account_rows.html", context={"request": request, "accounts": accounts, "app_settings": app_settings}
     )
 
 
 @router.post("/accounts/clean", response_class=HTMLResponse)
 async def cleanup_accounts(request: Request) -> Any:
     """HTMX endpoint to delete inactive/banned accounts and refresh rows."""
+    from app.core.models import AppSettings
+    app_settings, _ = await AppSettings.get_or_create(id=1)
     dead_accounts = await TelegramAccount.filter(
         status__in=[AccountStatus.BANNED, AccountStatus.FLOOD_WAIT]
     )
@@ -55,13 +59,15 @@ async def cleanup_accounts(request: Request) -> Any:
 
     accounts = await TelegramAccount.all()
     return templates.TemplateResponse(
-        request=request, name="partials/account_rows.html", context={"request": request, "accounts": accounts}
+        request=request, name="partials/account_rows.html", context={"request": request, "accounts": accounts, "app_settings": app_settings}
     )
 
 
 @router.delete("/accounts/{account_id}", response_class=HTMLResponse)
 async def delete_account(request: Request, account_id: int) -> Any:
     """HTMX endpoint to manually delete a single account."""
+    from app.core.models import AppSettings
+    app_settings, _ = await AppSettings.get_or_create(id=1)
     account = await TelegramAccount.get_or_none(id=account_id)
     if account:
         session_path = os.path.join(settings.data_dir, f"session_{account.id}.session")
@@ -74,7 +80,7 @@ async def delete_account(request: Request, account_id: int) -> Any:
 
     accounts = await TelegramAccount.all()
     return templates.TemplateResponse(
-        request=request, name="partials/account_rows.html", context={"request": request, "accounts": accounts}
+        request=request, name="partials/account_rows.html", context={"request": request, "accounts": accounts, "app_settings": app_settings}
     )
 
 
