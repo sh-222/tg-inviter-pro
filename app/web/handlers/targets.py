@@ -47,6 +47,7 @@ async def clear_targets(
             "request": request,
             "runner_state": {
                 "is_running": runner.is_running,
+                "status": runner.status,
                 "target_group": runner.target_group_username,
             },
             "stats": {

@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 
 from datetime import datetime, timezone
-from app.core.models import TelegramAccount, TargetUser, AccountStatus, InviteStatus
+from app.core.models import TelegramAccount, TargetUser, AccountStatus, InviteStatus, AppSettings
 from app.services.inviter import InviterService
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ class InviterRunner:
         self._current_task: Optional[asyncio.Task] = None
         self._is_running = False
         self._target_group_username: Optional[str] = None
+        self._status: str = "stopped"  # "stopped", "running", "paused_limit"
 
     async def _run_loop(self, target_group_username: str) -> None:
         logger.info(f"Starting inviter loop for group {target_group_username}")
@@ -28,6 +29,9 @@ class InviterRunner:
                     logger.info("Inviter loop finished: No more uninvited users.")
                     break
 
+                app_settings, _ = await AppSettings.get_or_create(id=1)
+
+                # Unfreeze flood_wait accounts whose freeze period has expired
                 now = datetime.now(timezone.utc)
                 frozen_accounts = await TelegramAccount.filter(
                     status=AccountStatus.FLOOD_WAIT
@@ -39,29 +43,72 @@ class InviterRunner:
                         await f_acc.save()
                         logger.info(f"Account {f_acc.id} unfrozen.")
 
+                # Reactivate limit_reached accounts whose counter has been reset
+                limit_accounts = await TelegramAccount.filter(
+                    status=AccountStatus.LIMIT_REACHED
+                )
+                for l_acc in limit_accounts:
+                    if l_acc.invites_today < app_settings.daily_invite_limit:
+                        l_acc.status = AccountStatus.ACTIVE
+                        await l_acc.save()
+                        logger.info(
+                            f"Account {l_acc.id} reactivated (limit reset)."
+                        )
+
+                # Filter active accounts that haven't reached the daily limit
                 active_accounts = await TelegramAccount.filter(
                     status=AccountStatus.ACTIVE
                 )
-                if not active_accounts:
-                    logger.warning("Inviter loop stopped: No active accounts.")
-                    break
+                available_accounts = [
+                    acc for acc in active_accounts
+                    if acc.invites_today < app_settings.daily_invite_limit
+                ]
+
+                if not available_accounts:
+                    # Check if there are active accounts that are all at limit
+                    all_active = await TelegramAccount.filter(
+                        status__in=[AccountStatus.ACTIVE, AccountStatus.LIMIT_REACHED]
+                    )
+                    if all_active:
+                        self._status = "paused_limit"
+                        logger.info(
+                            "Inviter loop paused: All active accounts reached "
+                            "daily invite limit. Waiting 1 hour..."
+                        )
+                        await asyncio.sleep(3600)
+                        continue
+                    else:
+                        logger.warning(
+                            "Inviter loop stopped: No active accounts."
+                        )
+                        break
+
+                self._status = "running"
 
                 for user in uninvited_users:
                     if not self._is_running:
                         break
 
+                    # Re-fetch available accounts for the inner loop
+                    app_settings, _ = await AppSettings.get_or_create(id=1)
                     active_accounts = await TelegramAccount.filter(
                         status=AccountStatus.ACTIVE
                     )
-                    if not active_accounts:
+                    available_accounts = [
+                        acc for acc in active_accounts
+                        if acc.invites_today < app_settings.daily_invite_limit
+                    ]
+
+                    if not available_accounts:
                         logger.warning(
-                            "All accounts are inactive, restricted, or in flood wait. Pausing for 60s..."
+                            "All accounts reached limit or inactive. "
+                            "Pausing for 60s..."
                         )
                         await asyncio.sleep(60)
-                        break  # Break inner loop to re-evaluate frozen accounts in outer loop
+                        break
 
-                    account_index = account_index % len(active_accounts)
-                    account = active_accounts[account_index]
+                    account_index = account_index % len(available_accounts)
+                    account = available_accounts[account_index]
                     account_index += 1
 
                     logger.info(
@@ -80,15 +127,14 @@ class InviterRunner:
 
                     if status == InviteStatus.SUCCESS:
                         import random
-                        from app.core.models import AppSettings
 
-                        app_settings, _ = await AppSettings.get_or_create(id=1)
                         global_delay = random.uniform(
                             app_settings.min_delay_seconds,
                             app_settings.max_delay_seconds
                         )
                         logger.info(
-                            f"Invite successful. Waiting {global_delay:.0f}s before next invite globally."
+                            f"Invite successful. Waiting {global_delay:.0f}s "
+                            f"before next invite globally."
                         )
                         await asyncio.sleep(global_delay)
 
@@ -102,6 +148,7 @@ class InviterRunner:
             self._is_running = False
             self._current_task = None
             self._target_group_username = None
+            self._status = "stopped"
             logger.info("Inviter loop stopped.")
 
     def start(self, target_group_username: str) -> bool:
@@ -109,6 +156,7 @@ class InviterRunner:
             return False
 
         self._is_running = True
+        self._status = "running"
         self._target_group_username = target_group_username
         self._current_task = asyncio.create_task(self._run_loop(target_group_username))
         return True
@@ -120,11 +168,16 @@ class InviterRunner:
         self._is_running = False
         self._current_task.cancel()
         self._target_group_username = None
+        self._status = "stopped"
         return True
 
     @property
     def is_running(self) -> bool:
         return self._is_running
+
+    @property
+    def status(self) -> str:
+        return self._status
 
     @property
     def target_group_username(self) -> Optional[str]:

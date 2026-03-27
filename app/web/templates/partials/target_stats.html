@@ -1,5 +1,12 @@
 <div id="target-stats" hx-get="/stats" hx-trigger="every 15s [!document.hidden], targetStatsUpdated from:body" hx-swap="outerHTML">
-    {% if runner_state and runner_state.is_running %}
+    {% if runner_state and runner_state.is_running and runner_state.status == 'paused_limit' %}
+    <div class="mb-4 bg-amber-500/20 border border-amber-500/50 rounded-md p-3">
+        <div class="text-sm font-medium text-amber-400">Bot is Paused — All accounts reached daily limit</div>
+        <div class="text-xs text-slate-300 mt-1">
+            Targeting: <span class="font-semibold text-white">{{ runner_state.target_group }}</span>
+        </div>
+    </div>
+    {% elif runner_state and runner_state.is_running %}
     <div class="mb-4 bg-brand/20 border border-brand/50 rounded-md p-3">
         <div class="text-sm font-medium text-brand">Bot is Active</div>
         <div class="text-xs text-slate-300 mt-1">

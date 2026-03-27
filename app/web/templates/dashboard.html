@@ -59,6 +59,12 @@
                 <h2 class="text-xl font-semibold text-brand">Accounts Status</h2>
                 <div class="flex gap-2">
                     <button
+                        class="text-sm bg-amber-600 hover:bg-amber-700 px-3 py-1 rounded text-white transition duration-150 font-medium"
+                        hx-post="/accounts/reset-counters" hx-target="#accounts-tbody" hx-swap="innerHTML"
+                        hx-confirm="Reset all daily invite counters to 0?">
+                        Reset Counters
+                    </button>
+                    <button
                         class="text-sm bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-white transition duration-150 font-medium"
                         hx-post="/accounts/clean" hx-target="#accounts-tbody" hx-swap="innerHTML">
                         Clean Dead

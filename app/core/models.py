@@ -7,6 +7,7 @@ class AccountStatus(str, Enum):
     BANNED = "banned"
     FLOOD_WAIT = "flood_wait"
     INACTIVE = "inactive"
+    LIMIT_REACHED = "limit_reached"
 
 
 class TelegramAccount(models.Model):

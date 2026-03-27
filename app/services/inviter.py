@@ -267,6 +267,12 @@ class InviterService:
             logger.info(f"Invited {user_ref} via {account.id}")
 
             account.invites_today += 1
+            if account.invites_today >= app_settings.daily_invite_limit:
+                account.status = AccountStatus.LIMIT_REACHED
+                logger.info(
+                    f"Account {account.id} reached daily invite limit "
+                    f"({account.invites_today}/{app_settings.daily_invite_limit})."
+                )
             await account.save()
             target_user.is_invited = True
             await target_user.save()

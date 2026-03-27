@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
+import asyncio
 import os
 import logging
+from datetime import datetime, timezone, timedelta
 
 from fastapi import FastAPI
 from dishka.integrations.fastapi import setup_dishka
@@ -22,15 +24,56 @@ logging.basicConfig(
 )
 
 
+async def _daily_reset_task() -> None:
+    """Background task that resets invites_today at midnight UTC every day."""
+    while True:
+        now = datetime.now(timezone.utc)
+        tomorrow = (now + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        seconds_until_midnight = (tomorrow - now).total_seconds()
+        logger.info(
+            f"Daily reset scheduled in {seconds_until_midnight:.0f}s "
+            f"(at {tomorrow.isoformat()})"
+        )
+        await asyncio.sleep(seconds_until_midnight)
+
+        try:
+            from app.core.models import TelegramAccount, AccountStatus
+
+            updated = await TelegramAccount.all().update(invites_today=0)
+            logger.info(f"Daily reset: cleared invites_today for {updated} accounts.")
+
+            limit_accounts = await TelegramAccount.filter(
+                status=AccountStatus.LIMIT_REACHED
+            )
+            for acc in limit_accounts:
+                acc.status = AccountStatus.ACTIVE
+                await acc.save()
+            if limit_accounts:
+                logger.info(
+                    f"Daily reset: reactivated {len(limit_accounts)} "
+                    f"LIMIT_REACHED accounts."
+                )
+        except Exception as e:
+            logger.exception(f"Daily reset failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     os.makedirs(settings.data_dir, exist_ok=True)
     migrate_sqlite_db()
-    
-    logger.info("Application started up")
-    
+
+    reset_task = asyncio.create_task(_daily_reset_task())
+    logger.info("Application started up (daily reset task scheduled)")
+
     yield
-    
+
+    reset_task.cancel()
+    try:
+        await reset_task
+    except asyncio.CancelledError:
+        pass
     if hasattr(app.state, "dishka_container"):
         await app.state.dishka_container.close()
     logger.info("Application shutdown completed")

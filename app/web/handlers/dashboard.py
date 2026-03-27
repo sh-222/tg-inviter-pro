@@ -3,7 +3,7 @@ from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse
 from dishka.integrations.fastapi import FromDishka, inject
 
-from app.core.models import TelegramAccount, TargetUser, InviteLog, InviteStatus
+from app.core.models import TelegramAccount, TargetUser, InviteLog, InviteStatus, AccountStatus
 from app.services.runner import InviterRunner
 from app.web.core import templates
 
@@ -50,6 +50,7 @@ async def dashboard(
             "accounts": accounts,
             "runner_state": {
                 "is_running": runner.is_running,
+                "status": runner.status,
                 "target_group": runner.target_group_username,
             },
             "stats": {
@@ -99,6 +100,7 @@ async def get_stats(
             "request": request,
             "runner_state": {
                 "is_running": runner.is_running,
+                "status": runner.status,
                 "target_group": runner.target_group_username,
             },
             "stats": {
@@ -175,3 +177,30 @@ async def update_settings(
     await app_settings.save()
     
     return "<div class='text-green-400 text-sm mt-2'>Settings updated successfully!</div>"
+
+
+@router.post("/accounts/reset-counters", response_class=HTMLResponse)
+async def reset_invite_counters(request: Request) -> Any:
+    """HTMX endpoint to manually reset all daily invite counters."""
+    await TelegramAccount.all().update(invites_today=0)
+
+    limit_accounts = await TelegramAccount.filter(
+        status=AccountStatus.LIMIT_REACHED
+    )
+    for acc in limit_accounts:
+        acc.status = AccountStatus.ACTIVE
+        await acc.save()
+
+    from app.core.models import AppSettings
+    app_settings, _ = await AppSettings.get_or_create(id=1)
+    accounts = await TelegramAccount.all()
+
+    return templates.TemplateResponse(
+        request=request,
+        name="partials/account_rows.html",
+        context={
+            "request": request,
+            "accounts": accounts,
+            "app_settings": app_settings,
+        },
+    )
