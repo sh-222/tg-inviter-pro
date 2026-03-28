@@ -42,6 +42,7 @@ class AppProvider(Provider):
                 "proxy": proxy_dict,
                 "workdir": str(settings.data_dir),
                 "password": account.password,
+                "no_updates": True,
             }
 
             if account.device_model:
