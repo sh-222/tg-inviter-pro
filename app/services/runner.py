@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import Optional
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from app.core.models import TelegramAccount, TargetUser, AccountStatus, InviteStatus, AppSettings
 from app.services.inviter import InviterService
 
@@ -37,11 +37,21 @@ class InviterRunner:
                     status=AccountStatus.FLOOD_WAIT
                 )
                 for f_acc in frozen_accounts:
-                    if f_acc.frozen_until and f_acc.frozen_until <= now:
-                        f_acc.status = AccountStatus.ACTIVE
-                        f_acc.frozen_until = None
+                    if f_acc.frozen_until:
+                        if f_acc.frozen_until <= now:
+                            f_acc.status = AccountStatus.ACTIVE
+                            f_acc.frozen_until = None
+                            await f_acc.save()
+                            logger.info(f"Account {f_acc.id} unfrozen (time expired).")
+                    else:
+                        # If frozen_until is missing, it's stuck. 
+                        # We set it to 24h from now as a safe recovery default.
+                        f_acc.frozen_until = now + timedelta(hours=24)
                         await f_acc.save()
-                        logger.info(f"Account {f_acc.id} unfrozen.")
+                        logger.warning(
+                            f"Account {f_acc.id} was in FLOOD_WAIT without expiration. "
+                            f"Set default 24h freeze until {f_acc.frozen_until}."
+                        )
 
                 # Reactivate limit_reached accounts whose counter has been reset
                 limit_accounts = await TelegramAccount.filter(

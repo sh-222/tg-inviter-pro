@@ -126,8 +126,10 @@ class InviterService:
             
         elif isinstance(e, FloodWait):
             account.status = AccountStatus.FLOOD_WAIT
+            # Add extra safety margin (5s) to the wait time
+            account.frozen_until = datetime.now(timezone.utc) + timedelta(seconds=e.value + 5)
             await account.save()
-            logger.warning(f"FloodWait on {account.id} for {e.value}s")
+            logger.warning(f"FloodWait on {account.id} for {e.value}s. Frozen until {account.frozen_until}")
             return InviteStatus.ERROR, f"FloodWait: {e.value}s"
             
         elif isinstance(e, PeerFlood):
@@ -210,11 +212,16 @@ class InviterService:
             client = self.client_factory(account)
             # Add timeout to prevent hanging on bad proxy or interactive login prompts
             await asyncio.wait_for(client.start(), timeout=20)
+            
+            # Simulate app opening delay
+            warmup_delay = random.uniform(5, 12)
+            logger.info(f"Account {account.id} warming up for {warmup_delay:.1f}s...")
+            await asyncio.sleep(warmup_delay)
 
             try:
                 await client.invoke(UpdateStatus(offline=False))
                 logger.info(f"Account {account.id} set status to 'Online' via raw API")
-                await asyncio.sleep(random.uniform(2, 5))
+                await asyncio.sleep(random.uniform(3, 7))
             except Exception as e:
                 logger.warning(
                     f"Failed to set status online for account {account.id}: {e}"
@@ -234,7 +241,7 @@ class InviterService:
             try:
                 logger.info(f"Simulating profile view for {user_ref} via {account.id}")
                 await client.get_users(user_ref)
-                view_delay = random.uniform(3, 8)
+                view_delay = random.uniform(4, 10)
                 logger.info(f"Waiting {view_delay:.1f}s after viewing profile")
                 await asyncio.sleep(view_delay)
             except Exception as e:
@@ -248,7 +255,7 @@ class InviterService:
                         user_id=contact_id,
                         first_name=target_user.username or "User",
                     )
-                    contact_delay = random.uniform(5, 15)
+                    contact_delay = random.uniform(8, 20)
                     logger.info(f"Waiting {contact_delay:.1f}s after adding contact")
                     await asyncio.sleep(contact_delay)
                 except Exception as e:
@@ -258,6 +265,11 @@ class InviterService:
 
             channel_peer = await client.resolve_peer(resolved_target)
             user_peer = await client.resolve_peer(user_ref)
+
+            # Extra jitter before the actual invite call
+            final_delay = random.uniform(3, 6)
+            logger.info(f"Waiting final {final_delay:.1f}s before invite invocation")
+            await asyncio.sleep(final_delay)
 
             await client.invoke(
                 InviteToChannel(channel=channel_peer, users=[user_peer])
@@ -276,6 +288,11 @@ class InviterService:
             await account.save()
             target_user.is_invited = True
             await target_user.save()
+
+            # Wait a bit before stopping client to seem less "transactional"
+            post_invite_delay = random.uniform(10, 25)
+            logger.info(f"Account {account.id} staying idle for {post_invite_delay:.1f}s after success")
+            await asyncio.sleep(post_invite_delay)
 
         except Exception as e:
             status, error_msg = await self._handle_invite_error(e, account, target_user)
