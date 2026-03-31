@@ -15,8 +15,10 @@ from pyrogram.errors import (
     UserAlreadyParticipant,
     RPCError,
     UserDeactivated,
+    UsernameNotOccupied,
+    UsernameInvalid,
+    PeerIdInvalid,
 )
-from tortoise.exceptions import IntegrityError
 
 from app.core.config import settings
 from app.core.models import (
@@ -165,144 +167,117 @@ class InviterService:
             logger.exception(f"Unexpected error on {account.id}: {e}")
             return InviteStatus.ERROR, f"Unexpected Error: {e}"
 
-    async def add_chat_members(
+    async def start_client(self, account: TelegramAccount) -> Client:
+        """Start the client, perform warmup and set online status."""
+        client = self.client_factory(account)
+        await asyncio.wait_for(client.start(), timeout=20)
+        
+        # Simulate app opening delay
+        warmup_delay = random.uniform(5, 12)
+        logger.info(f"Account {account.id} warming up for {warmup_delay:.1f}s...")
+        await asyncio.sleep(warmup_delay)
+
+        try:
+            await client.invoke(UpdateStatus(offline=False))
+            logger.info(f"Account {account.id} set status to 'Online' via raw API")
+            await asyncio.sleep(random.uniform(3, 7))
+        except Exception as e:
+            logger.warning(
+                f"Failed to set status online for account {account.id}: {e}"
+            )
+            
+        return client
+
+    async def get_channel_peer(
+        self, client: Client, account: TelegramAccount, target_group_username: str
+    ):
+        """Ensure membership and resolve channel peer."""
+        membership = await self._ensure_chat_membership(
+            client, account, target_group_username
+        )
+        if membership == InviteStatus.WAITING:
+            return InviteStatus.WAITING
+            
+        resolved_target = (
+            membership if isinstance(membership, str) else target_group_username
+        )
+        return await client.resolve_peer(resolved_target)
+
+    async def add_single_user(
         self,
+        client: Client,
         account: TelegramAccount,
         target_user: TargetUser,
+        channel_peer: any,
         target_group_username: str,
     ) -> InviteStatus:
-        """Add a target user to the chat using the specified account."""
+        """Invite a single user using an already active client and resolved channel peer."""
         if not target_user.username:
             logger.warning(f"Target user {target_user.id} has no username. Skipping.")
             target_user.is_invited = True
             await target_user.save()
-            await InviteLog.create(
-                account=account,
-                target_user=target_user,
-                target_group_id=target_group_username,
-                status=InviteStatus.ERROR,
-                error_message="No username provided",
-            )
             return InviteStatus.ERROR
 
-        app_settings, _ = await AppSettings.get_or_create(id=1)
-
-        if (
-            account.status != AccountStatus.ACTIVE
-            or account.invites_today >= app_settings.daily_invite_limit
-        ):
-            logger.warning(f"Account {account.id} is not active or reached limit.")
-            return InviteStatus.ERROR
-
-        base_delay = random.uniform(
-            app_settings.min_delay_seconds, app_settings.max_delay_seconds
-        )
-        jitter = base_delay * random.uniform(-0.1, 0.1)
-        wait_time = base_delay + jitter
-        logger.info(
-            f"Account {account.id} generates a random delay of {wait_time:.0f}s before connecting..."
-        )
-        await asyncio.sleep(wait_time)
-
+        user_ref = target_user.username.strip("@")
         status = InviteStatus.ERROR
         error_msg = None
-        client = None
 
         try:
-            client = self.client_factory(account)
-            # Add timeout to prevent hanging on bad proxy or interactive login prompts
-            await asyncio.wait_for(client.start(), timeout=20)
-            
-            # Simulate app opening delay
-            warmup_delay = random.uniform(5, 12)
-            logger.info(f"Account {account.id} warming up for {warmup_delay:.1f}s...")
-            await asyncio.sleep(warmup_delay)
-
-            try:
-                await client.invoke(UpdateStatus(offline=False))
-                logger.info(f"Account {account.id} set status to 'Online' via raw API")
-                await asyncio.sleep(random.uniform(3, 7))
-            except Exception as e:
-                logger.warning(
-                    f"Failed to set status online for account {account.id}: {e}"
-                )
-
-            membership = await self._ensure_chat_membership(
-                client, account, target_group_username
-            )
-            if membership == InviteStatus.WAITING:
-                return membership
-            resolved_target = (
-                membership if isinstance(membership, str) else target_group_username
-            )
-
-            user_ref = target_user.username.strip("@")
-
+            # 1. Profile View / Validation
             try:
                 logger.info(f"Simulating profile view for {user_ref} via {account.id}")
-                await client.get_users(user_ref)
+                user_obj = await client.get_users(user_ref)
+                
+                if user_obj.deleted:
+                    logger.warning(f"Target user {user_ref} is deleted. Marking as invited.")
+                    target_user.is_invited = True
+                    await target_user.save()
+                    return InviteStatus.ERROR
+
                 view_delay = random.uniform(4, 10)
-                logger.info(f"Waiting {view_delay:.1f}s after viewing profile")
                 await asyncio.sleep(view_delay)
+                user_peer = await client.resolve_peer(user_obj.id)
+            except (UsernameNotOccupied, UsernameInvalid, PeerIdInvalid):
+                logger.warning(f"Target user {user_ref} does not exist. Marking as invited.")
+                target_user.is_invited = True
+                await target_user.save()
+                return InviteStatus.ERROR
             except Exception as e:
                 logger.warning(f"Failed to view profile for {user_ref}: {e}")
+                # We raise to let _handle_invite_error decide if it's fatal
+                raise e 
 
-            if target_user.tg_id or target_user.username:
+            # 2. Add Contact (Conditional/Randomized)
+            # Only 20% chance to add contact if username is present
+            if random.random() < 0.2:
                 try:
-                    contact_id = target_user.tg_id or target_user.username
-                    logger.info(f"Adding contact {contact_id} via {account.id}")
+                    logger.info(f"Randomly adding contact {user_ref} via {account.id}")
                     await client.add_contact(
-                        user_id=contact_id,
-                        first_name=target_user.username or "User",
+                        user_id=user_obj.id,
+                        first_name=user_obj.first_name or user_ref,
                     )
-                    contact_delay = random.uniform(8, 20)
-                    logger.info(f"Waiting {contact_delay:.1f}s after adding contact")
-                    await asyncio.sleep(contact_delay)
+                    await asyncio.sleep(random.uniform(8, 20))
                 except Exception as e:
-                    logger.warning(
-                        f"Failed to add contact {target_user.tg_id or target_user.username}: {e}"
-                    )
+                    logger.warning(f"Failed to add contact {user_ref}: {e}")
 
-            channel_peer = await client.resolve_peer(resolved_target)
-            user_peer = await client.resolve_peer(user_ref)
-
-            # Extra jitter before the actual invite call
-            final_delay = random.uniform(3, 6)
-            logger.info(f"Waiting final {final_delay:.1f}s before invite invocation")
-            await asyncio.sleep(final_delay)
-
+            # 3. Final Delay & Invite
+            await asyncio.sleep(random.uniform(3, 6))
             await client.invoke(
                 InviteToChannel(channel=channel_peer, users=[user_peer])
             )
 
             status = InviteStatus.SUCCESS
-            logger.info(f"Invited {user_ref} via {account.id}")
+            logger.info(f"Successfully invited {user_ref} via {account.id}")
 
             account.invites_today += 1
-            if account.invites_today >= app_settings.daily_invite_limit:
-                account.status = AccountStatus.LIMIT_REACHED
-                logger.info(
-                    f"Account {account.id} reached daily invite limit "
-                    f"({account.invites_today}/{app_settings.daily_invite_limit})."
-                )
             await account.save()
             target_user.is_invited = True
             await target_user.save()
 
-            # Wait a bit before stopping client to seem less "transactional"
-            post_invite_delay = random.uniform(10, 25)
-            logger.info(f"Account {account.id} staying idle for {post_invite_delay:.1f}s after success")
-            await asyncio.sleep(post_invite_delay)
-
         except Exception as e:
             status, error_msg = await self._handle_invite_error(e, account, target_user)
-        finally:
-            if client and client.is_connected:
-                try:
-                    await client.stop()
-                except Exception as e:
-                    logger.error(f"Error stopping client {account.id}: {e}")
 
+        # Log the attempt
         try:
             await InviteLog.create(
                 account=account,
@@ -311,11 +286,44 @@ class InviterService:
                 status=status,
                 error_message=error_msg,
             )
-        except IntegrityError:
-            logger.warning(
-                f"Skipping log creation for {account.id}, account might have been deleted."
-            )
         except Exception as e:
             logger.error(f"Failed to create InviteLog: {e}")
 
         return status
+
+    async def add_chat_members(
+        self,
+        account: TelegramAccount,
+        target_user: TargetUser,
+        target_group_username: str,
+    ) -> InviteStatus:
+        """
+        Legacy method for single-invite fallback. 
+        Will start client, invite one user, and stop client.
+        """
+        app_settings, _ = await AppSettings.get_or_create(id=1)
+        if account.status != AccountStatus.ACTIVE or account.invites_today >= app_settings.daily_invite_limit:
+            return InviteStatus.ERROR
+
+        client = None
+        try:
+            client = await self.start_client(account)
+            channel_peer = await self.get_channel_peer(client, account, target_group_username)
+            if channel_peer == InviteStatus.WAITING:
+                return InviteStatus.WAITING
+            
+            status = await self.add_single_user(client, account, target_user, channel_peer, target_group_username)
+            
+            if status == InviteStatus.SUCCESS:
+                # Wait a bit before stopping client to seem less "transactional"
+                await asyncio.sleep(random.uniform(10, 25))
+            return status
+        except Exception as e:
+            status, error_msg = await self._handle_invite_error(e, account, target_user)
+            return status
+        finally:
+            if client and client.is_connected:
+                try:
+                    await client.stop()
+                except Exception as e:
+                    logger.error(f"Error stopping client {account.id}: {e}")
