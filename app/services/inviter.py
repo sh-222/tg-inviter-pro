@@ -228,7 +228,7 @@ class InviterService:
                 logger.info(f"Simulating profile view for {user_ref} via {account.id}")
                 user_obj = await client.get_users(user_ref)
                 
-                if user_obj.deleted:
+                if user_obj.is_deleted:
                     logger.warning(f"Target user {user_ref} is deleted. Marking as invited.")
                     target_user.is_invited = True
                     await target_user.save()
